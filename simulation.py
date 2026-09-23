@@ -33,8 +33,12 @@ class DirectionState:
 
 
 class TrafficSimulation:
-    STOP_LINE_POSITION = 0.68
-    INITIAL_STOP_BUFFER = 0.16
+    # Fallback stop-line fraction used before the canvas geometry is known.
+    STOP_LINE_POSITION = 0.32
+    INITIAL_STOP_BUFFER = 0.05
+    # Spacing between queued vehicles and how many we draw per approach.
+    QUEUE_GAP = 0.05
+    MAX_VISUAL_VEHICLES = 8
 
     def __init__(self, model, seed: int = 12):
         self.model = model
@@ -57,6 +61,9 @@ class TrafficSimulation:
         self.phase_index = 0
         self.phase_elapsed = 0.0
         self.time_elapsed = 0.0
+        # Per-approach stop-line position (0..1 along the approach); the dashboard
+        # updates these from the real canvas geometry on every redraw.
+        self.stop_fraction = {direction: self.STOP_LINE_POSITION for direction in DIRECTIONS}
         self.history = []
         self.predictions = {direction: "LOW" for direction in DIRECTIONS}
         self.confidences = {direction: 0.0 for direction in DIRECTIONS}
@@ -80,13 +87,14 @@ class TrafficSimulation:
         colors = ("#5eead4", "#fbbf24", "#60a5fa", "#fb7185")
         for index, direction in enumerate(DIRECTIONS):
             state = self.states[direction]
+            anchor = self.stop_fraction[direction]
             state.vehicles = [
                 Vehicle(
-                    position=float(self.rng.uniform(0.08, self.STOP_LINE_POSITION - self.INITIAL_STOP_BUFFER)),
+                    position=float(self.rng.uniform(0.06, max(0.1, anchor - 0.03))),
                     lane=index % 2,
                     color=colors[index],
                 )
-                for _ in range(min(state.vehicle_count, 22))
+                for _ in range(min(state.vehicle_count, self.MAX_VISUAL_VEHICLES))
             ]
 
     def update_predictions(self) -> None:
@@ -154,17 +162,27 @@ class TrafficSimulation:
         self._record_history()
 
     def _move_visual_vehicles(self, direction: str, state: DirectionState, seconds: float) -> None:
-        can_move = self.signal_status(direction) == "GREEN"
-        speed = 0.20 * seconds if can_move else 0.0
-        for vehicle in state.vehicles:
-            vehicle.position += speed
-            if not can_move:
-                vehicle.position = min(vehicle.position, self.STOP_LINE_POSITION)
+        # Only a GREEN or clearing YELLOW approach lets vehicles roll forward.
+        moving = self.signal_status(direction) in ("GREEN", "YELLOW")
+        step = 0.20 * seconds
+        anchor = self.stop_fraction[direction]
+        if moving:
+            for vehicle in state.vehicles:
+                vehicle.position += step
+        else:
+            # Red approach: any vehicle that already reached the stop line has
+            # cleared the junction, the rest wait in a staggered queue behind it.
+            state.vehicles = [vehicle for vehicle in state.vehicles if vehicle.position <= anchor + 0.02]
+            queue = sorted(state.vehicles, key=lambda vehicle: vehicle.position, reverse=True)
+            for slot, vehicle in enumerate(queue):
+                limit = max(0.0, anchor - slot * self.QUEUE_GAP)
+                if vehicle.position > limit:
+                    vehicle.position = limit
         state.vehicles = [vehicle for vehicle in state.vehicles if vehicle.position < 1.05]
-        while len(state.vehicles) < min(state.vehicle_count, 22):
+        while len(state.vehicles) < min(state.vehicle_count, self.MAX_VISUAL_VEHICLES):
             state.vehicles.append(
                 Vehicle(
-                    position=float(self.rng.uniform(0.0, 0.12)),
+                    position=float(self.rng.uniform(0.0, 0.1)),
                     lane=int(self.rng.integers(0, 2)),
                     color="#dbeafe",
                 )

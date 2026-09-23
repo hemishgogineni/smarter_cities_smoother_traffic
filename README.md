@@ -83,22 +83,32 @@ Every update adds current state costs to both a fixed 30-second rotation baselin
 
 Estimated emission reduction is derived only from the difference between accumulated simulated idle-time costs. It is explicitly an estimate, not measured pollution or a real-world emissions result.
 
-## Installation
+## Installation and How to Run
 
-Python 3.10 or newer is recommended.
+The quickest path is the bundled script, which builds an isolated virtual
+environment (on a Python with a working Tk so the window is not blank),
+installs `requirements.txt`, and opens the dashboard:
 
 ```bash
-cd ~/Documents/Smarter_Cities_Smoother_Traffic
-python -m pip install -r requirements.txt
+cd smarter_cities_smoother_traffic
+./run.sh
 ```
 
-Tkinter is included with most macOS Python installations.
+Other modes: `./run.sh --setup` (prepare the environment only) and
+`./run.sh --reset` (rebuild the environment from scratch).
 
-## How to Run
+### Manual alternative
+
+Python 3.10 or newer with a working Tkinter (Tk 8.6) is recommended. Apple's
+built-in Python 3.9 ships with Tk 8.5, which renders Tkinter windows blank on
+current macOS; if that is your only Python, install a newer one, for example
+`brew install python@3.11 python-tk@3.11`.
 
 ```bash
-cd ~/Documents/Smarter_Cities_Smoother_Traffic
-python main.py
+cd smarter_cities_smoother_traffic
+python3 -m venv venv311
+./venv311/bin/python -m pip install -r requirements.txt
+./venv311/bin/python main.py
 ```
 
 ## CIA Demo Procedure

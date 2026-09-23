@@ -298,6 +298,14 @@ class TrafficDashboard:
         south_stop_y = center_y + road_width / 2 + stop_line_gap
         east_stop_x = center_x + road_width / 2 + stop_line_gap
         west_stop_x = center_x - road_width / 2 - stop_line_gap
+        # Tell the simulation where each approach's stop line sits (0..1 along the
+        # approach) so waiting vehicles queue behind it instead of in the junction.
+        self.simulation.stop_fraction = {
+            "NORTH": 1 - south_stop_y / height,
+            "SOUTH": north_stop_y / height,
+            "EAST": west_stop_x / width,
+            "WEST": 1 - east_stop_x / width,
+        }
         canvas.create_line(
             center_x - road_width / 2,
             north_stop_y,
@@ -345,40 +353,24 @@ class TrafficDashboard:
 
         for direction, state in self.simulation.states.items():
             for vehicle in state.vehicles:
-                self._draw_vehicle(
-                    canvas,
-                    direction,
-                    vehicle,
-                    self.simulation.signal_status(direction),
-                    center_x,
-                    center_y,
-                    road_width,
-                    width,
-                    height,
-                    stop_line_gap,
-                )
+                self._draw_vehicle(canvas, direction, vehicle, center_x, center_y, road_width, width, height)
 
     @staticmethod
-    def _draw_vehicle(canvas, direction, vehicle, signal_status, center_x, center_y, road_width, width, height, stop_line_gap) -> None:
+    def _draw_vehicle(canvas, direction, vehicle, center_x, center_y, road_width, width, height) -> None:
+        # The simulation already holds waiting vehicles behind the stop line, so
+        # the drawing just maps the approach position (0..1) onto the canvas.
         lane_shift = -road_width * 0.18 if vehicle.lane == 0 else road_width * 0.18
+        position = min(max(vehicle.position, 0.0), 1.05)
         if direction == "NORTH":
-            stop_position = 1 - (center_y - road_width / 2 - stop_line_gap) / height
-            position = min(vehicle.position, stop_position) if signal_status == "RED" else vehicle.position
             x, y = center_x + lane_shift, height * (1 - position)
             box = (x - 5, y - 10, x + 5, y + 10)
         elif direction == "SOUTH":
-            stop_position = (center_y + road_width / 2 + stop_line_gap) / height
-            position = min(vehicle.position, stop_position) if signal_status == "RED" else vehicle.position
             x, y = center_x + lane_shift, height * position
             box = (x - 5, y - 10, x + 5, y + 10)
         elif direction == "EAST":
-            stop_position = (center_x + road_width / 2 + stop_line_gap) / width
-            position = min(vehicle.position, stop_position) if signal_status == "RED" else vehicle.position
             x, y = width * position, center_y + lane_shift
             box = (x - 10, y - 5, x + 10, y + 5)
         else:
-            stop_position = 1 - (center_x - road_width / 2 - stop_line_gap) / width
-            position = min(vehicle.position, stop_position) if signal_status == "RED" else vehicle.position
             x, y = width * (1 - position), center_y + lane_shift
             box = (x - 10, y - 5, x + 10, y + 5)
         canvas.create_rectangle(*box, fill=vehicle.color, outline="")
